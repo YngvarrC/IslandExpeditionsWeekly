@@ -92,8 +92,16 @@ function addon:OnInitialize()
     end
 
     addon.next_reset = addon:getNextWeeklyReset()
-    -- if previous reset is earlier than next reset, reset manually
-    if IslandExpeditionsWeeklyDB.ResetTime < addon.next_reset then
+    --[[
+        if previous reset is earlier than next reset, reset manually
+        we now base the reset on a 10 min difference between next weekly reset and last stored next weekly reset
+        because simply doing
+            IslandExpeditionsWeeklyDB.ResetTime < addon.next_reset
+        is not reliable enough
+        The calculated server reset seems to be off by a few seconds sometimes compared to earlier calculations, which causes unwanted resets)
+    --]]
+    if (addon.next_reset - IslandExpeditionsWeeklyDB.ResetTime) > 600 then
+        -- addon:printToChat("\124c0000FFFFRESETTING "..IslandExpeditionsWeeklyDB.ResetTime.." < "..addon.next_reset.."\124r")
         addon:resetProgress()
     end
 end
