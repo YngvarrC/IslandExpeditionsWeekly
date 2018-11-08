@@ -1,7 +1,7 @@
 ## Interface: 80000
 ## Title: Island Expeditions Weekly
 ## Notes: Keep track of your island expedition weekly quest completion on all your characters
-## Version: 1.0.1
+## Version: 1.0.2
 ## Author: Lyrenia (EU-Draenor)
 ## SavedVariables: IslandExpeditionsWeeklyDB
 ## OptionalDeps: Ace3
