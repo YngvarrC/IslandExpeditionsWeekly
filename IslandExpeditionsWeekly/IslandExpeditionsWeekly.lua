@@ -9,7 +9,7 @@
 -- Init Ace3
 local addonName = ...
 _G[addonName] = LibStub("AceAddon-3.0"):NewAddon(addonName, "AceConsole-3.0", "AceEvent-3.0")
---_G[addonName].GUI = LibStub("AceGUI-3.0")
+_G[addonName].GUI = LibStub("AceGUI-3.0")
 --_G[addonName].LDB = LibStub("LibDataBroker-1.1")
 --_G[addonName].LDBI = LibStub("LibDBIcon-1.0")
 
@@ -32,35 +32,42 @@ local chat_options = {
             func = function() addon:showProgress() end,
             order = 1
         },
+        showgui = {
+            type = "execute",
+            name = 'show',
+            desc = "Show the progress in a simple window",
+            func = function() addon:showGui() end,
+            order = 2
+        },
         reset = {
             type = "execute",
             name = 'reset',
             desc = "Reset the character database",
             func = function() addon:initDB(); addon:storeProgress(); addon:printToChat("DB reset succesful") end,
-            order = 5
+            order = 6
         },
         ignorelist = {
             type = "execute",
             name = 'ignorelist',
             desc = "Get a list of all ignored characters",
             func = function() addon:printIgnoreList() end,
-            order = 3
+            order = 4
         },
         clearignore = {
             type = "execute",
             name = 'clearignore',
             desc = "Unignore all characters",
             func = function() addon:clearIgnoreList() end,
-            order = 4
+            order = 5
         },
         ignore = {
             type = "input",
             name = "toggleignore",
             usage = "<Realm>.<Character>",
-            desc = "Toggle ignoring a certain character so it doesn't get displayed",
+            desc = "Toggle ignoring a certain character so it doesn't get displayed. Note that the gui will not be updated until you /reload",
             get = false,
             set = function(info, character_key) addon:toggleIgnoreCharacter(character_key) end,
-            order = 2
+            order = 3
         },
         --[[data = {
             type = "execute",
@@ -143,11 +150,7 @@ function addon:ChatCommand(input)
   end
 end
 
---[[
-====== Print stuff to user functions
---]]
-
-function addon:showProgress()
+function addon:getProgressTable()
     if IslandExpeditionsWeeklyDB ~= nil then
         local chars_120 = {}
         local chars_other = {}
@@ -163,8 +166,19 @@ function addon:showProgress()
         -- sort both alphabetically
         tsort(chars_120)
         tsort(chars_other)
-        local ordered_chars = addon:mergeTables(chars_120, chars_other)
+        return addon:mergeTables(chars_120, chars_other)
+    else
+        return nil
+    end
+end
 
+--[[
+====== Print stuff to user functions
+--]]
+
+function addon:showProgress()
+    local ordered_chars = addon:getProgressTable()
+    if ordered_chars ~= nil then
         local data_header = "Weekly island expedition progress:\nRealm Name: Azerite Collected -- WQ\n"
         local data_lines = ""
         for i = 1, #ordered_chars do
@@ -175,64 +189,25 @@ function addon:showProgress()
                 if v.Finished_azerite then
                     line = line.." \124cFF00FF00Done\124r"
                 else
-                    line = line.." \124cFFFF0000"..v.Progress_azerite.."/40K\124r"
+                    line = line.." \124cFFFF0000"..v.Progress_azerite.."/36K\124r"
                 end
             else
                 line = line.." \124c0000FFFFN/A\124r"
             end
-
+--[[
+            -- seems that in 8.1 this world quest was removed (couldn't find any info about it)
+            -- so for now we just don't show the completion state
             -- everyone can do the world quest
             if v.Finished_xp == true then
                 line = line.." -- \124cFF00FF00Done\124r"
             elseif v.Finished_xp == false then
                 line = line.." -- \124cFFFF0000Open\124r"
             end
+--]]
             data_lines = data_lines..line.."\n"
         end
 
         addon:printToChat(data_header..data_lines);
-    else
-        addon:printToChat("no data!")
-    end
-end
-
--- DEPRECATED
-function addon:showProgressOld()
-    if IslandExpeditionsWeeklyDB ~= nil then
-        local ordered = {}
-        for key in pairs(IslandExpeditionsWeeklyDB.Characters) do
-            tinsert(ordered, key)
-        end
-        tsort(ordered)
-
-        local line_max_header = "Weekly island azerite collecting progress:\n"
-        local line_max = ""
-        local line_xp_header = "Weekly island expedition WQ progress:\n"
-        local line_xp = ""
-        for i = 1, #ordered do
-            local v = IslandExpeditionsWeeklyDB.Characters[ordered[i]]
-            local line = "\124c0000FFFF"..v.Realm.."\124r "..v.Name
-            if v.level == 120 then
-                if v.Finished_azerite then
-                    line_max = line_max..line.." \124cFF00FF00Finished collecting azerite!\124r\n"
-                else
-                    line_max = line_max..line.." \124cFFFF0000"..v.Progress_azerite.."/40000 azerite collected\124r\n"
-                end
-            elseif v.level > 109 and v.level < 120 then
-                if v.Finished_xp == true then
-                    line_xp = line_xp..line.." \124cFF00FF00Finished xp quest!\124r\n"
-                elseif v.Finished_xp == false then
-                    line_xp = line_xp..line.." \124cFFFF0000Xp quest not completed!\124r\n"
-                end
-            end
-        end
-
-        if #line_max > 0 then
-            addon:printToChat(line_max_header..line_max);
-        end
-        if #line_xp > 0 then
-            addon:printToChat(line_xp_header..line_xp);
-        end
     else
         addon:printToChat("no data!")
     end
@@ -251,6 +226,161 @@ function addon:printIgnoreList()
         else
             addon:printToChat("No characters ignored")
         end
+end
+
+function addon:showGui()
+    local col1_width = 0.5
+    local col2_width = 0.5
+    --local col3_width = 0.2
+
+    if self.panel == nil then
+        self.label_current_character = {};
+        self.panel = self.GUI:Create("Window")
+        self.panel:EnableResize(false)
+        self.panel:SetWidth(350)
+        self.panel:SetHeight(450)
+        self.panel:SetTitle("Island expeditions weekly tracker")
+        self.panel:SetLayout("Flow")
+
+        local rowcontainer = self.GUI:Create("SimpleGroup")
+        rowcontainer:SetFullWidth(true)
+        rowcontainer:SetLayout("Flow")
+
+        local label = self.GUI:Create("Label")
+        label:SetText("Character")
+        label:SetRelativeWidth(col1_width)
+        label:SetHeight(20)
+        label:SetColor(1,1,0)
+        label:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+        rowcontainer:AddChild(label)
+        local label = self.GUI:Create("Label")
+        label:SetText("Collected azerite")
+        label:SetJustifyH("RIGHT")
+        label:SetRelativeWidth(col2_width)
+        label:SetHeight(20)
+        label:SetColor(1,1,0)
+        label:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+        rowcontainer:AddChild(label)
+--[[
+        local label = self.GUI:Create("Label")
+        label:SetText("WQ")
+        label:SetJustifyH("RIGHT")
+        label:SetRelativeWidth(col3_width)
+        label:SetHeight(20)
+        label:SetColor(1,1,0)
+        label:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+        rowcontainer:AddChild(label)
+--]]
+        self.panel:AddChild(rowcontainer)
+
+        local line = self.GUI:Create("SimpleGroup")
+        line:SetLayout("Flow")
+        line:SetFullWidth(true)
+        local tex = line.frame:CreateTexture(nil, "BACKGROUND")
+        tex:SetAllPoints()
+        tex:SetColorTexture(1, 1, 0, .8)
+        self.panel:AddChild(line)
+
+        local scrollcontainer = self.GUI:Create("SimpleGroup")
+        scrollcontainer:SetFullWidth(true)
+        scrollcontainer:SetFullHeight(true)
+        scrollcontainer:SetLayout("Fill")
+
+        self.panel:AddChild(scrollcontainer)
+
+        local scroll = self.GUI:Create("ScrollFrame")
+        scroll:SetLayout("Flow")
+        scrollcontainer:AddChild(scroll)
+
+        local ordered_chars = addon:getProgressTable()
+        local prev_realm = ""
+        if ordered_chars ~= nil then
+            for i = 1, #ordered_chars do
+                local v = IslandExpeditionsWeeklyDB.Characters[ordered_chars[i]]
+
+                local rowcontainer = self.GUI:Create("SimpleGroup")
+                rowcontainer:SetFullWidth(true)
+                rowcontainer:SetLayout("Flow")
+
+                if prev_realm ~= v.Realm then
+                    local label = self.GUI:Create("Label")
+                    label:SetText("------"..v.Realm.."------")
+                    label:SetJustifyH("CENTER")
+                    label:SetColor(0,1,1)
+                    label:SetFullWidth(true)
+                    label:SetHeight(20)
+                    label:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+                    rowcontainer:AddChild(label)
+                    prev_realm = v.Realm
+                end
+
+                local label = self.GUI:Create("Label")
+                label:SetText(v.Name)
+                label:SetRelativeWidth(col1_width)
+                label:SetHeight(20)
+                label:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+                rowcontainer:AddChild(label)
+
+                local label_progress = self.GUI:Create("Label")
+                label_progress:SetRelativeWidth(col2_width)
+                label_progress:SetHeight(20)
+                label_progress:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+                label_progress:SetJustifyH("RIGHT")
+                if v.level == 120 then
+                    if v.Finished_azerite then
+                        label_progress:SetText('Done')
+                        label_progress:SetColor(0,1,0)
+                    else
+                        label_progress:SetText(v.Progress_azerite..'/36K')
+                        label_progress:SetColor(1,0,0)
+                    end
+                else
+                    label_progress:SetText("N/A")
+                    label_progress:SetColor(0,1,1)
+                end
+                rowcontainer:AddChild(label_progress)
+
+--[[
+                local label_wq = self.GUI:Create("Label")
+                label_wq:SetRelativeWidth(col3_width)
+                label_wq:SetHeight(20)
+                label_wq:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+                label_wq:SetJustifyH("RIGHT")
+                if v.Finished_xp then
+                    label_wq:SetText("DONE")
+                    label_wq:SetColor(0,1,0)
+                else
+                    label_wq:SetText("OPEN")
+                    label_wq:SetColor(1,0,0)
+                end
+                rowcontainer:AddChild(label_wq)
+--]]
+                if (v.Name == addon.name) then
+                    self.label_current_character['progress'] = label_progress
+                    -- self.label_current_character['wq'] = label_wq
+                end
+                scroll:AddChild(rowcontainer)
+            end
+        end
+    else
+        if (self.label_current_character ~= nil) then
+            local current_progress = IslandExpeditionsWeeklyDB.Characters[addon.key]
+            if current_progress.level == 120 then
+                if current_progress.Finished_azerite then
+                     self.label_current_character['progress']:SetText('Done')
+                     self.label_current_character['progress']:SetColor(0,1,0)
+                else
+                     self.label_current_character['progress']:SetText(current_progress.Progress_azerite..'/36K')
+                     self.label_current_character['progress']:SetColor(1,0,0)
+                end
+            else
+                 self.label_current_character['progress']:SetText("N/A")
+                 self.label_current_character['progress']:SetColor(0,1,1)
+            end
+        end
+        self.panel:Show()
+    end
+
 end
 
 --[[
