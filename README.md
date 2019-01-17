@@ -1,3 +1,5 @@
+<i>I have quit WoW for the time being and as a result will no longer be maintaining this addon.</i>
+
 # Island Expeditions Weekly
 
 Tired of always having to return to that table to check your progress? So was I and that's why I made this little addon.
